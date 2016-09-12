@@ -1,63 +1,46 @@
 import argparse
+from itertools import product
 import time
 
 import pygame
 import pygame.midi
 
+CODONS = list(''.join(p) for p in product('atgc', repeat=3))
 
-NOTES_BY_NUC = {
-    'a': 72,
-    'g': 78,
-    't': 90,
-    'c': 45,
-}
+MIDI_NOTES_BY_CODON = {codon: i for i, codon in enumerate(CODONS, start=31)}
 
-CHORD_BY_NUC = {
-    'a': (84, 98, 100),
-    'g': (23, 54, 100),
-    't': (35, 72, 100),
-    'c': (90, 100, 127),
-}
-
+MIDI_CHORDS_BY_CODON = {codon: (i, i + 2, i + 4) for i, codon in enumerate(CODONS, start=31)}
 
 VOLUME = 127
 PERIOD = 0.33
-
-def chord_on(midi_out, chord):
-    note1, note2, note3 = CHORD_BY_NUC.get(chord, (24, 53, 35))
-    # turn on cord
-    midi_out.note_on(note1, VOLUME)
-    midi_out.note_on(note2, VOLUME)
-    midi_out.note_on(note3, VOLUME)
+MIDDLE_C = 60
 
 
-def chord_off(midi_out, chord):
-    note1, note2, note3 = CHORD_BY_NUC.get(chord, (24, 53, 35))
-    # turn off cord
-    midi_out.note_off(note1, VOLUME)
-    midi_out.note_off(note2, VOLUME)
-    midi_out.note_off(note3, VOLUME)
+def chord_on_off(midi_out, chord_codon, note_on=True):
+    chord_notes = MIDI_CHORDS_BY_CODON.get(chord_codon)
+    for note in chord_notes:
+        getattr(midi_out, 'note_on' if note_on else 'note_off')(note, VOLUME)
 
 
-def play_bar(midi_out, chord, note1, note2, note3):
-    chord_on(midi_out, chord)
+def play_bar(midi_out, chord_codon, codon1, codon2, codon3):
+    chord_on_off(midi_out, chord_codon)
 
-    note = NOTES_BY_NUC.get(note1, 80)
+    note = MIDI_NOTES_BY_CODON.get(codon1, MIDDLE_C)
     midi_out.note_on(note, VOLUME)
     time.sleep(PERIOD)
     midi_out.note_off(note, VOLUME)
 
-    note = NOTES_BY_NUC.get(note2, 80)
+    note = MIDI_NOTES_BY_CODON.get(codon2, MIDDLE_C)
     midi_out.note_on(note, VOLUME)
     time.sleep(PERIOD)
     midi_out.note_off(note, VOLUME)
 
-    note = NOTES_BY_NUC.get(note3, 80)
+    note = MIDI_NOTES_BY_CODON.get(codon3, MIDDLE_C)
     midi_out.note_on(note, VOLUME)
     time.sleep(PERIOD)
     midi_out.note_off(note, VOLUME)
 
-    chord_off(midi_out, chord)
+    chord_on_off(midi_out, chord_codon, note_on=False)
 
 
 def generate_nucs_from_path(path, skip_heterochromatin=True):
@@ -85,12 +68,22 @@ def generate_nucs_from_path(path, skip_heterochromatin=True):
         fp.close()
 
 
-def play_from_nuc_generator(midi_out, gen):
+def play_from_nuc_generator(midi_out, gen, offset=0):
+    i = 0
     while True:
-        nucs = ''.join(next(gen) for _ in range(4))
+        i += 1
 
-        print(nucs)
-        play_bar(midi_out, *nucs)
+        chord = ''.join(next(gen) for _ in range(3))
+        note1 = ''.join(next(gen) for _ in range(3))
+        note2 = ''.join(next(gen) for _ in range(3))
+        note3 = ''.join(next(gen) for _ in range(3))
+
+        if offset >= i:  # don't play these notes if we are below the offset
+            continue
+
+        print(time.time(), chord, note1, note2, note3)
+        play_bar(midi_out, chord, note1, note2, note3)
+
 
 
 def parse_args():
@@ -99,6 +92,11 @@ def parse_args():
     parser.add_argument('-p', '--play-heterochromatin',
                         action='store_true',
                         default=False)
+    parser.add_argument('-o', '--offset',
+                        type=int,
+                        default=0)
+
+
 
     args = parser.parse_args()
 
@@ -120,7 +118,7 @@ def main():
         midi_out = pygame.midi.Output(port, 0)
         midi_out.set_instrument(0)
 
-        play_from_nuc_generator(midi_out, nuc_generator)
+        play_from_nuc_generator(midi_out, nuc_generator, args.offset)
     except KeyboardInterrupt:
         pass
 
