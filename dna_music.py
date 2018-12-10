@@ -7,12 +7,13 @@ import pygame.midi
 
 CODONS = list(''.join(p) for p in product('atgc', repeat=3))
 
-MIDI_NOTES_BY_CODON = {codon: i for i, codon in enumerate(CODONS, start=31)}
+MIDI_NOTES_BY_CODON = {codon: i for i, codon in enumerate(CODONS, start=32)}
 
-MIDI_CHORDS_BY_CODON = {codon: (i, i + 2, i + 4) for i, codon in enumerate(CODONS, start=31)}
+MIDI_CHORDS_BY_CODON = {codon: (i, i + 2, i + 4) for i, codon in enumerate(CODONS, start=32)}
 
 VOLUME = 127
 PERIOD = 0.33
+PERIOD = 0.17
 MIDDLE_C = 60
 
 
@@ -23,8 +24,6 @@ def chord_on_off(midi_out, chord_codon, note_on=True):
 
 
 def play_bar(midi_out, chord_codon, codon1, codon2, codon3):
-    chord_on_off(midi_out, chord_codon)
-
     note = MIDI_NOTES_BY_CODON.get(codon1, MIDDLE_C)
     midi_out.note_on(note, VOLUME)
     time.sleep(PERIOD)
@@ -40,29 +39,28 @@ def play_bar(midi_out, chord_codon, codon1, codon2, codon3):
     time.sleep(PERIOD)
     midi_out.note_off(note, VOLUME)
 
-    chord_on_off(midi_out, chord_codon, note_on=False)
 
 
 def generate_nucs_from_path(path, skip_heterochromatin=True):
     try:
-        fp = open(path)
-        for line in fp:
-            line = line.strip()
+        with open(path) as fp:
+            for line in fp:
+                line = line.strip()
 
-            if line.startswith('>'):
-                continue
-
-            for nuc in line:
-                nuc = nuc.lower().strip()
-                if not nuc:
+                if line.startswith('>'):
                     continue
 
-                if skip_heterochromatin and nuc == 'n':
-                    continue
-                else:
-                    skip_heterochromatin = False
+                for nuc in line:
+                    nuc = nuc.lower().strip()
+                    if not nuc:
+                        continue
 
-                yield nuc
+                    if skip_heterochromatin and nuc == 'n':
+                        continue
+                    else:
+                        skip_heterochromatin = False
+
+                    yield nuc
 
     finally:
         fp.close()
@@ -111,6 +109,7 @@ def main():
         skip_heterochromatin=not args.play_heterochromatin,
     )
 
+    midi_out = None
     try:
         pygame.init()
         pygame.midi.init()
